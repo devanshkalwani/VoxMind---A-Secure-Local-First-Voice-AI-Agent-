@@ -1,65 +1,43 @@
-<div align="center">
-  <img src="https://img.icons8.com/color/96/000000/microphone.png" alt="logo" width="80"/>
-  <h1>VoxMind 🎙️</h1>
-  <p><strong>A Highly Secure, Fully-Local Voice AI Agent</strong></p>
+# VoxMind
 
-  [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
-  [![Local Framework](https://img.shields.io/badge/Local-Ollama%20%7C%20Llama--3-orange)](https://ollama.ai)
-  [![Transcription](https://img.shields.io/badge/STT-Faster--Whisper-green)](https://github.com/SYSTRAN/faster-whisper)
-</div>
+VoxMind is a completely local, voice-controlled AI agent. It takes spoken commands and translates them into system actions, like creating files, writing code, or running basic shell commands. Everything runs offline on edge hardware to avoid the privacy issues commonly associated with cloud AI providers.
 
----
+## How the system works
 
-In the era of cloud-first computing, streaming acoustic data directly limits privacy. **VoxMind** is a truly offline, deeply sandboxed Python AI agent designed to execute advanced desktop operations dynamically using Voice.
+The agent is built on a straightforward, step-by-step pipeline:
 
-## 🚀 Key Features
+1. **Transcription**: Audio is captured from the microphone and interpreted locally using Faster-Whisper.
+2. **Intent Parsing**: A local Meta Llama 3 instance reads the transcript. Instead of generating conversational text, it is prompted to output a strict JSON array that maps to predefined system functions.
+3. **Execution**: The system pauses to ask for human permission before applying any changes to the host machine.
 
-* **Strictly Local Audio Muxing**: Transcribes your voice locally using `faster-whisper (base.en)` utilizing native INT8 hardware acceleration.
-* **Deterministic Intent System**: Intercepts speech using Meta's `Llama-3` (via Ollama) mapped through a JSON structural constraint.
-* **Jailed Execution Sandbox**: All dynamically generated files, python payloads, and code appends are strictly routed into the `output/` folder, destroying any OS directory traversal risk.
-* **Native Desktop Triggers**: Can spawn subprocess operations natively (e.g., `"open -a 'Visual Studio Code'"`).
-* **Zero-Trust Human Authorization**: While the agent dynamically scopes the payload, it will **never** execute physical writes without human authorization via the Streamlit backend.
+## Setup Instructions
 
----
+To run this project, make sure you have Python installed. You will also need Ollama to run the text models natively.
 
-## 🛠️ Quick Start
-
-Ensure you have a modern macOS system natively equipped with Homebrew.
-
-### 1. Audio System Setup
-You must supply your system with raw C-binding drivers so `faster-whisper` can consume binary audio safely.
+First, install `ffmpeg`. The Whisper transcription model relies on this to handle audio buffers correctly.
 ```bash
 brew install ffmpeg
 ```
 
-### 2. Prepare the AI Nodes
-Install [Ollama](https://ollama.com/) locally. Pull the inference engine into your local weight cache:
+Next, pull the Llama 3 model weights via Ollama.
 ```bash
 ollama run llama3
 ```
 
-### 3. Spin Up VoxMind
+Clone the repository and install the standard dependencies.
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/VoxMind.git
-cd VoxMind
-
-# Spin up a localized virtual environment & inject dependencies
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
+```
 
-# Boot the Dashboard
+Finally, boot up the dashboard.
+```bash
 streamlit run app.py
 ```
 
----
+## Security and Constraints
 
-## 🧠 System Execution Lifecycle
-Instead of abstract operations, VoxMind visibly renders the structural breakdown of its actions logically inside the UI sequence tree:
-1. **TRANSCRIPTION**: Raw acoustic mapping
-2. **INTENT DETECTION**: LLM Structural Routing classification
-3. **ACTION PROPOSAL**: `create_file()`, `write_code()`, or `run_command()`
-4. **SECURE RESULT**: Human Authorization validation & Python process outcome
+A major challenge when building agents is ensuring they don't accidentally wipe or alter important system data. To prevent directory traversal attacks, any file creation or code generation is strictly confined to the `output/` directory within the repository.
 
-*(Developed for Apple Silicon M-Series. Highly compatible across Intel Linux/Windows with minor audio driver abstraction.)*
+Additionally, VoxMind uses a human-in-the-loop architecture. Even if the LLM correctly parses a spoken command to open an application or modify a script, the backend will not execute the subprocess until you manually click the authorization button on the user interface.
