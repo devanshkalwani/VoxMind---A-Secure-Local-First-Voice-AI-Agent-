@@ -15,3 +15,7 @@ output/
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Temp Audio
+temp_*.wav
+*.wav

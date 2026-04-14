@@ -1,5 +1,6 @@
 import streamlit as st  # type: ignore
 import os
+import time
 
 from audio_utils import transcribe_audio
 from llm_router import classify_intent
@@ -127,6 +128,8 @@ if "current_transcript" not in st.session_state:
     st.session_state.current_transcript = ""
 if "widget_key" not in st.session_state:
     st.session_state.widget_key = 0
+if "run_id" not in st.session_state:
+    st.session_state.run_id = 0
 
 # Sidebar has been removed based on user request.
 
@@ -163,115 +166,144 @@ manual_text = text_input.strip()
 
 # --- PIPELINE EXECUTION ---
 if manual_text or audio_to_process:
-    
-    input_hash = hash(manual_text) if manual_text else hash(audio_to_process.getvalue())
-    
-    if st.session_state.processed_audio_hash != input_hash:
-        st.session_state.processed_audio_hash = input_hash
-        st.session_state.current_commands = []
-        st.session_state.current_transcript = ""
+    try:
+        # Safe Hash Calculation
+        raw_data = manual_text.encode() if manual_text else audio_to_process.getvalue()
+        input_hash = hash(raw_data)
         
-        st.toast("Input received. Initializing pipeline...", icon="⚡")
-        
-        if manual_text:
-            st.session_state.current_transcript = manual_text
-        else:
-            audio_bytes = audio_to_process.getvalue()
-            temp_path = f"temp_{input_hash}.wav"
-            with open(temp_path, "wb") as f:
-                f.write(audio_bytes)
-                
-            with st.spinner("Module 1: STT Engine processing (Whisper base.en)..."):
-                st.session_state.current_transcript = transcribe_audio(temp_path)
+        if st.session_state.processed_audio_hash != input_hash:
+            # We only process if the hash is NEW
+            st.session_state.processed_audio_hash = input_hash
+            st.session_state.current_commands = []
+            st.session_state.current_transcript = ""
+            st.session_state.run_id = time.time() # New unique ID for this set of commands
             
-            try:
-                os.remove(temp_path)
-            except Exception:
+            st.toast("Input received. Initializing pipeline...", icon="⚡")
+            
+            if manual_text:
+                st.session_state.current_transcript = manual_text
+            else:
+                audio_bytes = audio_to_process.getvalue()
+                temp_path = f"temp_{input_hash}.wav"
+                with open(temp_path, "wb") as f:
+                    f.write(audio_bytes)
+                    
+                with st.spinner("Module 1: STT Engine processing (Whisper base.en)..."):
+                    st.session_state.current_transcript = transcribe_audio(temp_path)
+                
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
+                
+            if st.session_state.current_transcript and not st.session_state.current_transcript.startswith("Error"):
+                with st.spinner("Module 2: Intent Classification (Llama-3 LLM Core)..."):
+                    intent_data = classify_intent(st.session_state.current_transcript)
+                    commands = intent_data.get("commands", [])
+                    
+                    if not commands and "intent" in intent_data:
+                        commands = [intent_data]
+                        
+                    st.session_state.current_commands = commands
+                    
+                    # Reset widget for next turn
+                    st.session_state.widget_key += 1
+                    st.rerun()
+            elif st.session_state.current_transcript.startswith("Error"):
+                # If there's an error, we still want to reset the widget so the user can try again
+                # but we'll wait for them to see the error message below.
                 pass
-            
-        if st.session_state.current_transcript and not st.session_state.current_transcript.startswith("Error"):
-            with st.spinner("Module 2: Intent Classification (Llama-3 LLM Core)..."):
-                intent_data = classify_intent(st.session_state.current_transcript)
-                commands = intent_data.get("commands", [])
-                
-                if not commands and "intent" in intent_data:
-                    commands = [intent_data]
-                    
-                st.session_state.current_commands = commands
 
-    # --- Render Results ---
-    if st.session_state.current_transcript:
+    except Exception as e:
+        st.error(f"⚠️ Pipeline Error: {str(e)}")
+
+# --- Render Results ---
+if st.session_state.current_transcript:
+    if st.session_state.current_transcript.startswith("Error"):
+        st.error(f"📡 {st.session_state.current_transcript}")
+        # Add help if it's a silence error
+        if "No speech detected" in st.session_state.current_transcript:
+            with st.expander("🛠️ Why is my mic flat-lined?", expanded=False):
+                st.markdown("""
+                **Seeing a 'Flat Line' or no waves?** 
+                1. **OS Settings**: Go to `System Settings -> Privacy & Security -> Microphone` and ensure your browser is toggled ON.
+                2. **Permissions**: Click the 🔒 icon in your browser URL bar and ensure 'Microphone' is allowed.
+                3. **Reload**: If you just changed settings, you must refresh this tab.
+                """)
+    else:
         st.success(f"**Identified Transcript:** \"{st.session_state.current_transcript}\"")
+    
+if st.session_state.current_commands:
+    st.divider()
+    st.subheader(f"Execution Graph: {len(st.session_state.current_commands)} Actions")
+    
+    for idx, cmd in enumerate(st.session_state.current_commands):
+        intent = cmd.get("intent", "chat")
         
-    if st.session_state.current_commands:
-        st.divider()
-        st.subheader(f"Execution Graph: {len(st.session_state.current_commands)} Actions")
-        
-        for idx, cmd in enumerate(st.session_state.current_commands):
-            intent = cmd.get("intent", "chat")
+        with st.container():
+            st.markdown(f"#### ❖ Action Request: `{intent.upper()}`")
             
-            with st.container():
-                st.markdown(f"#### ❖ Action Request: `{intent.upper()}`")
-                
-                task_id = f"{input_hash}_{st.session_state.widget_key}_{idx}"
-                if task_id in [h.get("id") for h in st.session_state.history]:
-                    st.info("✔ Task completed.")
-                    st.markdown("---")
-                    continue
-
-                if intent == "create_file":
-                    filename = cmd.get("filename", f"untitled_{idx}.txt")
-                    resource_type = cmd.get("resource_type", "file")
-                    st.warning(f"**Action Required:** Grant system permission to create physical {resource_type} `{filename}`.")
-                    if st.button(f"AUTHORIZE {resource_type.upper()} CREATION", key=f"btn_{task_id}"):
-                        with st.spinner(f"Allocating `{filename}`..."):
-                            result = tools.create_file(filename, resource_type=resource_type)
-                        action_str = f"Create {resource_type} '{filename}'"
-                        st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": action_str, "result": result})
-                        st.rerun()
-                        
-                elif intent == "write_code":
-                    filename = cmd.get("filename", f"script_{idx}.py")
-                    code_content = cmd.get("code_content", "# No code payload")
-                    append = cmd.get("append", False)
-                    action_word = "Append to" if append else "Write"
-                    
-                    st.warning(f"**Action Required:** System generated script payload to {action_word.lower()} `{filename}`.")
-                    with st.expander("Review Compiled Payload", expanded=True):
-                        st.code(code_content, language="python")
-                    
-                    if st.button("AUTHORIZE PAYLOAD DEPLOYMENT", key=f"btn_{task_id}"):
-                        with st.spinner("Deploying script locally..."):
-                            result = tools.write_code(filename, code_content, append=append)
-                        st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": f"{action_word} '{filename}'", "result": result})
-                        st.rerun()
-                        
-                elif intent == "summarize":
-                    text_to_summarize = cmd.get("text", "")
-                    if st.button("INITIATE SUMMARIZATION", key=f"btn_{task_id}"):
-                        with st.spinner("Analyzing text computationally..."):
-                            result = tools.summarize_text(text_to_summarize)
-                        st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": "Summarize text", "result": result})
-                        st.rerun()
-
-                elif intent == "run_command":
-                    command = cmd.get("command", "")
-                    st.warning(f"**Action Required:** Grant system permission to execute command: `{command}`")
-                    if st.button("AUTHORIZE SYSTEM COMMAND", key=f"btn_{task_id}"):
-                        with st.spinner("Executing command..."):
-                            result = tools.execute_system_command(command)
-                        st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": f"Execute '{command}'", "result": result})
-                        st.rerun()
-                        
-                elif intent == "chat":
-                    query = cmd.get("query", st.session_state.current_transcript)
-                    if st.button("QUERY LANGUAGE MODEL", key=f"btn_{task_id}"):
-                        with st.spinner("Generating synthesized response..."):
-                            result = tools.chat(query)
-                        st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": "General Chat", "result": result})
-                        st.rerun()
-                
+            # Dynamic Task ID using session state seed to ensure unique buttons per turn
+            task_id = f"cmd_{idx}_{st.session_state.get('run_id', 0)}"
+            
+            if task_id in [h.get("id") for h in st.session_state.history]:
+                st.info("✔ Task completed.")
                 st.markdown("---")
+                continue
+
+            if intent == "create_file":
+                filename = cmd.get("filename", f"untitled_{idx}.txt")
+                resource_type = cmd.get("resource_type", "file")
+                st.warning(f"**Action Required:** Grant system permission to create physical {resource_type} `{filename}`.")
+                if st.button(f"AUTHORIZE {resource_type.upper()} CREATION", key=f"btn_{task_id}"):
+                    with st.spinner(f"Allocating `{filename}`..."):
+                        result = tools.create_file(filename, resource_type=resource_type)
+                    action_str = f"Create {resource_type} '{filename}'"
+                    st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": action_str, "result": result})
+                    st.rerun()
+                    
+            elif intent == "write_code":
+                filename = cmd.get("filename", f"script_{idx}.py")
+                code_content = cmd.get("code_content", "# No code payload")
+                append = cmd.get("append", False)
+                action_word = "Append to" if append else "Write"
+                
+                st.warning(f"**Action Required:** System generated script payload to {action_word.lower()} `{filename}`.")
+                with st.expander("Review Compiled Payload", expanded=True):
+                    st.code(code_content, language="python")
+                
+                if st.button("AUTHORIZE PAYLOAD DEPLOYMENT", key=f"btn_{task_id}"):
+                    with st.spinner("Deploying script locally..."):
+                        result = tools.write_code(filename, code_content, append=append)
+                    st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": f"{action_word} '{filename}'", "result": result})
+                    st.rerun()
+                    
+            elif intent == "summarize":
+                text_to_summarize = cmd.get("text", "")
+                if st.button("INITIATE SUMMARIZATION", key=f"btn_{task_id}"):
+                    with st.spinner("Analyzing text computationally..."):
+                        result = tools.summarize_text(text_to_summarize)
+                    st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": "Summarize text", "result": result})
+                    st.rerun()
+
+            elif intent == "run_command":
+                command = cmd.get("command", "")
+                st.warning(f"**Action Required:** Grant system permission to execute command: `{command}`")
+                if st.button("AUTHORIZE SYSTEM COMMAND", key=f"btn_{task_id}"):
+                    with st.spinner("Executing command..."):
+                        result = tools.execute_system_command(command)
+                    st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": f"Execute '{command}'", "result": result})
+                    st.rerun()
+                    
+            elif intent == "chat":
+                query = cmd.get("query", st.session_state.current_transcript)
+                if st.button("QUERY LANGUAGE MODEL", key=f"btn_{task_id}"):
+                    with st.spinner("Generating synthesized response..."):
+                        result = tools.chat(query)
+                    st.session_state.history.append({"id": task_id, "transcript": st.session_state.current_transcript, "intent": intent, "action": "General Chat", "result": result})
+                    st.rerun()
+            
+            st.markdown("---")
 
 # --- ARCHITECTURE FOOTER (3 Boxes) ---
 st.markdown("<br><br><h3 style='text-align: center; margin-bottom: 30px; letter-spacing: 0.1em; text-transform: uppercase; font-size: 1.1rem; color: #94a3b8;'>System Architecture & Protocols</h3>", unsafe_allow_html=True)

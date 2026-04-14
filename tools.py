@@ -11,10 +11,18 @@ OUTPUT_DIR = BASE_DIR / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def _get_safe_path(filename: str) -> pathlib.Path:
-    """Ensure the path strictly resolves inside the OUTPUT_DIR to prevent directory traversal."""
-    # Strip any directory path passed in filename
-    basename = os.path.basename(filename)
-    return OUTPUT_DIR / basename
+    """Ensure the path resolves inside the OUTPUT_DIR, allowing subdirectories but preventing traversal."""
+    # We resolve the path relative to OUTPUT_DIR
+    target_path = (OUTPUT_DIR / filename).resolve()
+    
+    # Check if the target is still within OUTPUT_DIR
+    if OUTPUT_DIR.resolve() in target_path.parents or target_path == OUTPUT_DIR.resolve():
+        # Ensure parent directories exist for the target path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        return target_path
+    else:
+        # Fallback to a safe flat path if it tries to escape
+        return OUTPUT_DIR / os.path.basename(filename)
 
 def create_file(filename: str, resource_type: str = "file", content: str = "") -> str:
     path = _get_safe_path(filename)
