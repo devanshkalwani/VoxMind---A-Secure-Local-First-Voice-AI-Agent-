@@ -1,5 +1,5 @@
 import json
-import ollama
+import ollama  # type: ignore
 
 SYSTEM_PROMPT = """You are a highly intelligent command router that controls a local AI agent.
 Analyze the user's spoken transcript and extract all the intents they wish to execute. The user might ask for multiple things in one sentence (Compound Commands).

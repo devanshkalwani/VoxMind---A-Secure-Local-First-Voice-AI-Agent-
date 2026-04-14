@@ -1,6 +1,7 @@
 import os
 import pathlib
 import subprocess
+import ollama  # type: ignore
 
 # Define the restricted output directory
 BASE_DIR = pathlib.Path(__file__).parent.resolve()
@@ -41,7 +42,6 @@ def write_code(filename: str, code_content: str, append: bool = False) -> str:
         return f"Error writing code: {e}"
 
 def summarize_text(text: str) -> str:
-    import ollama  # type: ignore
     try:
         response = ollama.chat(model='llama3', messages=[
             {'role': 'system', 'content': 'You are a highly capable summarizer. Provide a concise, clear summary of the text provided.'},
@@ -52,7 +52,6 @@ def summarize_text(text: str) -> str:
         return f"Error summarizing text: {e}"
 
 def chat(query: str) -> str:
-    import ollama  # type: ignore
     try:
         response = ollama.chat(model='llama3', messages=[
             {'role': 'system', 'content': 'You are VoxMind, a helpful AI assistant operating locally on this computer.'},

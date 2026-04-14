@@ -134,20 +134,12 @@ if "widget_key" not in st.session_state:
 st.markdown("<h1 class='voxmind-title'>VoxMind</h1>", unsafe_allow_html=True)
 st.markdown("<p style='font-size: 1.2rem; color: #94a3b8; margin-top: -10px; margin-bottom: 30px;'>Enterprise Voice-Controlled Restricted AI</p>", unsafe_allow_html=True)
 
-st.markdown("""
-<div class='glass-card'>
-    Given the constraint of pure-local execution, inject your instructions via the audio module below or manually type them. The backend will parse the intent securely. <br>
-</div>
-""", unsafe_allow_html=True)
-
-if "text_override" not in st.session_state:
-    st.session_state.text_override = ""
-
 def clear_dashboard():
     st.session_state.current_commands = []
     st.session_state.current_transcript = ""
     st.session_state.processed_audio_hash = None
     st.session_state.widget_key += 1
+    st.rerun()
 
 col_btn, _ = st.columns([1, 4])
 with col_btn:
@@ -223,7 +215,7 @@ if manual_text or audio_to_process:
                 
                 task_id = f"{input_hash}_{st.session_state.widget_key}_{idx}"
                 if task_id in [h.get("id") for h in st.session_state.history]:
-                    st.info("✔ Task completed and logged.")
+                    st.info("✔ Task completed.")
                     st.markdown("---")
                     continue
 
