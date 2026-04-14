@@ -1,4 +1,4 @@
-from faster_whisper import WhisperModel
+from faster_whisper import WhisperModel  # type: ignore
 
 # Model definition (we use base.en for perfectly balanced speed/accuracy on local Macs)
 MODEL_SIZE = "base.en"
