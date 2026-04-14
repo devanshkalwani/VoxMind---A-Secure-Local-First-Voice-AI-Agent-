@@ -126,8 +126,6 @@ if "current_commands" not in st.session_state:
     st.session_state.current_commands = []
 if "current_transcript" not in st.session_state:
     st.session_state.current_transcript = ""
-if "widget_key" not in st.session_state:
-    st.session_state.widget_key = 0
 
 # Sidebar has been removed based on user request.
 
@@ -141,26 +139,29 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+if "text_override" not in st.session_state:
+    st.session_state.text_override = ""
+
+def clear_dashboard():
+    st.session_state.text_override = ""
+    st.session_state.current_commands = []
+    st.session_state.current_transcript = ""
+
 col_btn, _ = st.columns([1, 4])
 with col_btn:
-    if st.button("🔄 CLEAR / NEW TASK", key="clear_all"):
-        st.session_state.widget_key += 1
-        st.session_state.processed_audio_hash = None
-        st.session_state.current_commands = []
-        st.session_state.current_transcript = ""
-        st.rerun()
+    st.button("🔄 CLEAR / NEW TASK", on_click=clear_dashboard)
 
 # Text Input Fallback option heavily styled via CSS
-text_input = st.text_input("Manual Text Override", placeholder="Type your command here clearly...", key=f"text_{st.session_state.widget_key}")
+text_input = st.text_input("Manual Text Override", placeholder="Type your command here clearly...", key="text_override")
 
 st.markdown("<br>", unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 
 with col1:
-    recorded_audio = st.audio_input("Initialize Microphone", key=f"mic_{st.session_state.widget_key}")
+    recorded_audio = st.audio_input("Initialize Microphone")
     
 with col2:
-    uploaded_audio = st.file_uploader("Upload Acoustic Signature (.wav)", type=["wav", "mp3"], key=f"file_{st.session_state.widget_key}")
+    uploaded_audio = st.file_uploader("Upload Acoustic Signature (.wav)", type=["wav", "mp3"])
 
 # Execution priority: Manual Text -> Recorded Audio -> Uploaded Audio
 audio_to_process = recorded_audio if recorded_audio else uploaded_audio
