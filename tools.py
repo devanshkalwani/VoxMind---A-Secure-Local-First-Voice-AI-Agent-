@@ -67,7 +67,7 @@ def execute_system_command(command: str) -> str:
     try:
         # We only allow some safe commands like open
         if not command.startswith("open "):
-            return f"Command restricted for safety. Only 'open' commands are permitted."
+            return "Command restricted for safety. Only 'open' commands are permitted."
         
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         if result.returncode == 0:

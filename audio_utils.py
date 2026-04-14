@@ -1,6 +1,4 @@
-import os
 from faster_whisper import WhisperModel
-import subprocess
 
 # Model definition (we use base.en for perfectly balanced speed/accuracy on local Macs)
 MODEL_SIZE = "base.en"
