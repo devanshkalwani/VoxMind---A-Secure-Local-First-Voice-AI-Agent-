@@ -6,7 +6,7 @@ This article explores the technical architecture, the specific reasoning behind 
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 VoxMind employs a modular, pipeline-style architecture to ensure safety, speed, and precision directly on the host device. The simple step-by-step pipeline relies on a "Human-in-the-Loop" fallback:
 
@@ -19,7 +19,7 @@ The execution tracking is completely visible to the user: displaying the raw **T
 
 ---
 
-## 🧠 Model Selection Strategies
+## Model Selection Strategies
 
 Building a highly responsive agent requires balancing computational overhead and inference accuracy, especially restricted to local CPU/GPU cycles.
 
@@ -31,7 +31,7 @@ For intent generation, I selected the Meta Llama-3 8B open-weights model deploye
 
 ---
 
-## 🚧 Core Engineering Challenges
+## Core Engineering Challenges
 
 While integrating multiple complex local toolchains, three significant architectural challenges required resolution:
 
